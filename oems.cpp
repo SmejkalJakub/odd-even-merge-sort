@@ -12,21 +12,38 @@ using namespace std;
 
 #define INPUT_SIZE 8
 
+#define DEBUG 1
+
+#ifdef DEBUG
+#include <chrono>
+#endif
+
+// Simple min function to get minimum from the 2 input values
 int min(int a, int b)
 {
     return a < b ? a : b;
 }
 
+// Simple max function to get maximum from the 2 input values
 int max(int a, int b)
 {
     return a > b ? a : b;
 }
 
+/**
+ * @brief Main function that takes care of most of the work
+ *        Every processor calls this when it gets both input values and then based on its rank sends the minimum and maximum to the respective processors.
+ * 
+ * @param processRank - rank of the processor that called this function. Needed for the decision on where to send the values
+ * @param recievedNumbers - two input numbers that the processor got from another processor or from input
+ */
 void oddEvenMerge(int processRank, int recievedNumbers[2])
 {
+    // Get minimum and maximum from the input
     int minimum = min(recievedNumbers[0], recievedNumbers[1]);
     int maximum = max(recievedNumbers[0], recievedNumbers[1]);
 
+    // Send the minimum and maximum values to the processors based on the current processor rank
     switch(processRank)
     {
         case 0:
@@ -146,6 +163,11 @@ void oddEvenMerge(int processRank, int recievedNumbers[2])
     }
 }
 
+/**
+ * @brief Master processor will call this function to load the numbers from the generated numbers file
+ * 
+ * @return vector<int> - Vector of the loaded numbers
+ */
 vector<int> loadNumbers()
 {
     vector <int> loadedNumbersVector;
@@ -178,6 +200,11 @@ vector<int> loadNumbers()
     return loadedNumbersVector;
 }
 
+/**
+ * @brief This function will print the loaded numbers at the start of the program
+ * 
+ * @param loadedNumbersVector - numbers that should be printed out
+ */
 void printLoadedNumbers(vector<int> loadedNumbersVector)
 {
     for(int i = 0; i < loadedNumbersVector.size(); i++)
@@ -192,6 +219,11 @@ void printLoadedNumbers(vector<int> loadedNumbersVector)
     cout << endl << flush;
 }
 
+/**
+ * @brief This function will print the sorted numbers at the end of the program
+ * 
+ * @param numbers - array of the sorted numbers that should be pronted out
+ */
 void printNumbersArray(int *numbers)
 {
     for(int i = 0; i < INPUT_SIZE; i++)
@@ -202,16 +234,14 @@ void printNumbersArray(int *numbers)
 
 int main(int argc, char **argv)
 {
-    int numberOfProcessors = 0;
     int processRank = 0;
-    int sizeOfGroup = 0; 
 
     MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &numberOfProcessors);
     MPI_Comm_rank(MPI_COMM_WORLD, &processRank);
 
     vector<int> numbers = {};
 
+    // Master processor will load numbers and distribute them to the first processors
     if(processRank == 0)
     {
         numbers = loadNumbers();
@@ -229,12 +259,24 @@ int main(int argc, char **argv)
         }
     }
 
+    // Wait for two input numbers from another processors
     int recievedNumbers[2] = {-1, -1};
     MPI_Recv(&recievedNumbers[0], 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, nullptr);
     MPI_Recv(&recievedNumbers[1], 1, MPI_INT, MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, nullptr);
 
+    #ifdef DEBUG
+	chrono::time_point<chrono::high_resolution_clock> start, end;
+	if (processRank == 0) start = chrono::high_resolution_clock::now();
+    #endif
+
     oddEvenMerge(processRank, recievedNumbers);
 
+    #ifdef DEBUG
+        if (processRank == 0) end = chrono::high_resolution_clock::now();
+    #endif
+
+
+    // Master processor will print the sorted numbers array
     if(processRank == 0)
     {
         int *nums = new int[INPUT_SIZE];
@@ -245,6 +287,14 @@ int main(int argc, char **argv)
         printNumbersArray(nums);
         delete nums;
     }
+
+    #ifdef DEBUG
+	if (processRank == 0)
+	{
+		chrono::duration<double> diff = end - start;
+		cout << endl << "Time: " << diff.count() << endl;
+	}
+    #endif
 
     MPI_Finalize();
 }
